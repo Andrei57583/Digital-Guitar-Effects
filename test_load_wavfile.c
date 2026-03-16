@@ -28,91 +28,70 @@ typedef struct
 #pragma pack(pop)
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("Utilizat: %s <file.wav>\n", argv[0]);
-        return 1;
-    }
+    if (argc < 2) { printf("Utilizare: %s <file.wav>\n", argv[0]); return 1; }
 
     FILE *fp = fopen(argv[1], "rb");
-    if (!fp) { perror("File error"); return 1;}
+    if (!fp) { perror("Eroare deschidere"); return 1; }
 
-    // Se citeste header-ul
-    RiffHeader riff;
-    fread(&riff, sizeof(riff), 1, fp);
+    char id[4];
+    uint32_t size;
+    uint16_t format, channels, bits;
+    uint32_t rate;
+    uint32_t data_size = 0;
 
-    // Se cauta chunk-ul 'fmt' si 'data'
-    FmtChunk fmt;
-    uint32_t dataSize = 0;
-    char chunkID[4];
-    uint32_t chunkSize;
+    // 1. Verificăm începutul (RIFF)
+    fread(id, 1, 4, fp);
+    if (strncmp(id, "RIFF", 4) != 0) { printf("Nu e RIFF\n"); return 1; }
+    fseek(fp, 4, SEEK_CUR); // Sărim peste dimensiunea fișierului
+    fread(id, 1, 4, fp);
+    if (strncmp(id, "WAVE", 4) != 0) { printf("Nu e WAVE\n"); return 1; }
 
-    // Cautam bucatile necesare
-    while (fread(chunkID, 1, 4, fp) == 4) {
-        fread(&chunkSize, 4, 1, fp);
+    // 2. Căutăm bucățile "fmt " și "data"
+    while (fread(id, 1, 4, fp) == 4) {
+        fread(&size, 4, 1, fp); // Citim dimensiunea chunk-ului curent
 
-        if (strncmp(chunkID, "fmt", 4) == 0) {
-            fread(&fmt, sizeof(FmtChunk), 1,fp);
-            // fmt > 16, se sare peste extensii
-            if (chunkSize > sizeof(FmtChunk))
-            fseek(fp, chunkSize - sizeof(FmtChunk), SEEK_CUR);
+        if (strncmp(id, "fmt ", 4) == 0) {
+            fread(&format, 2, 1, fp);
+            fread(&channels, 2, 1, fp);
+            fread(&rate, 4, 1, fp);
+            fseek(fp, 6, SEEK_CUR); // Sărim peste byteRate și blockAlign
+            fread(&bits, 2, 1, fp);
+            
+            // Dacă fmt e mai mare de 16 octeți, sărim restul (extensii)
+            if (size > 16) fseek(fp, size - 16, SEEK_CUR);
+            
+            if (format != 1) {
+                printf("Eroare: Formatul este %u (nu e PCM Integer!)\n", format);
+                return 1;
+            }
+        } 
+        else if (strncmp(id, "data", 4) == 0) {
+            data_size = size;
+            break; // Am găsit sunetul!
+        } 
+        else {
+            fseek(fp, size, SEEK_CUR); // Sărim peste orice altceva (LIST, JUNK, etc.)
         }
-        else if (strncmp(chunkID, "data", 4) == 0) {
-            dataSize = chunkSize;
-            break; // S-au gasit datele, ne oprim aici
-        }
-        else
-        {
-            // Sarim peste chunk-urile neimportante (LIST, JUNK, etc.)
-            fseek(fp, chunkSize, SEEK_CUR);
-        }
-        
     }
 
-    //PCM check
-    if (fmt.audioFormat != 1) {
-        printf("Sunt accepate doar fisiele PCM WAV.\n");
-        return 1;
-    }
+    printf("Incarcat: %uHz, %u-bit, %u canale, %u bytes audio\n", rate, bits, channels, data_size);
 
-    //Aloca si citeste date audio
-    int16_t *buffer = malloc(fmt.subchunk2Size);
-    if (!buffer) {printf("Eroare alocare memorie.\n"); return 1; }
-    fread(buffer, 1, fmt.subchunk2Size, fp);
+    // 3. Citim datele audio
+    int16_t *buffer = malloc(data_size);
+    fread(buffer, 1, data_size, fp);
     fclose(fp);
 
-    // SETUP ALSA
+    // 4. ALSA SETUP (Rămâne la fel ca în codul tău)
     snd_pcm_t *handle;
-
-    int err = snd_pcm_open(&handle, "plughw:0,0", SND_PCM_STREAM_PLAYBACK, 0);
-    if (err < 0) {
-        printf("Playback open error: %s\n", snd_strerror(err));
-        free(buffer);
-        return 1;
-    }
-
-    err = snd_pcm_set_params( handle,
-                        SND_PCM_FORMAT_S16_LE,
-                        SND_PCM_ACCESS_RW_INTERLEAVED,
-                        fmt.numChannels,
-                        fmt.sampleRate,
-                        1,          //soft resample
-                        500000  ); // 0.5s latenta
-    if (err < 0) {
-        printf("Eroare setare parametrii: %s\n", snd_strerror(err));
-    }
-    
-    printf("Ruleaza: %s (%uHz, %d channels, %u bytes)...\n", argv[1], fmt.sampleRate, fmt.numChannels, dataSize);
-    
-    // Calculam frame-urile
-    int frames = fmt.subchunk2Size / (fmt.numChannels * (fmt.bitsPerSample / 8));
+    snd_pcm_open(&handle, "plughw:0,0", SND_PCM_STREAM_PLAYBACK, 0);
+    snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, channels, rate, 1, 500000);
 
     // Redare
-    snd_pcm_sframes_t played = snd_pcm_writei(handle, buffer, frames);
-    if (played < 0) { played = snd_pcm_recover(handle, played, 0); }
-    
+    snd_pcm_uframes_t frames = data_size / (channels * (bits / 8));
+    snd_pcm_writei(handle, buffer, frames);
+
     snd_pcm_drain(handle);
     snd_pcm_close(handle);
     free(buffer);
-
     return 0;
 }
