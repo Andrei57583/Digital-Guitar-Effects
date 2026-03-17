@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     fread(buffer, 1, data_size, fp);
     fclose(fp);
 
-    // 4. ALSA SETUP (Rămâne la fel ca în codul tău)
+    // 4. ALSA SETUP
     snd_pcm_t *handle;
     snd_pcm_open(&handle, "plughw:0,0", SND_PCM_STREAM_PLAYBACK, 0);
     snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, channels, rate, 1, 500000);
