@@ -4,4 +4,4 @@ A se uitiliza urmatoarele comenzi:
 - pt. executie: ./play_wav fisier.wav
 
 Daca apar erori la incarcarea fisierului .wav, trebuie convertit cu comanda:
-ffmpeg -i fisier.wav -ar 48000 -ac 2 -c:a pcm_s16le audio_final.wav
+- ffmpeg -i fisier.wav -ar 48000 -ac 2 -c:a pcm_s16le audio_final.wav
