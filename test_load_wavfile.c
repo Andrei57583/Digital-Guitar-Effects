@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
+#include "effects.h"
 
 #pragma pack(push, 1)
 typedef struct 
@@ -80,6 +81,23 @@ int main(int argc, char *argv[]) {
     int16_t *buffer = malloc(data_size);
     fread(buffer, 1, data_size, fp);
     fclose(fp);
+
+    // Incarcam Efectul
+
+    uint32_t num_samples = data_size/ sizeof(int16_t);
+    float gain = 4.0f; // Crestem volumul pentru a forta distorsiunea
+
+    for (uint32_t i = 0; i < num_samples; i++) {
+        // Convertire int16_t la float (-1.0, 1.0)
+        float sample = (float)buffer[i] / 32768.0f;
+        // aplicare gain
+        sample *= gain;
+        // aplicare efect
+        //sample = soft_clip(sample);
+        sample = hard_clip(sample, 0.8f);
+        // Se converteste inapoi la int16_t pentru audio
+        buffer[i] = (int16_t)(sample * 32767.0f);
+    }
 
     // 4. ALSA SETUP
     snd_pcm_t *handle;
