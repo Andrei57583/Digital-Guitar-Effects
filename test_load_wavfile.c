@@ -95,13 +95,14 @@ int main(int argc, char *argv[]) {
         // Convertire int16_t la float (-1.0, 1.0)
         float sample = (float)buffer[i] / 32768.0f;
         // aplicare gain
-        //sample *= gain;
+        sample *= gain;
         
         // aplicare efect
-        //sample = soft_clip(sample);
-        //sample = hard_clip(sample, 0.7f);
-        //sample *= output_vol;
         sample = process_chorus(chorus, sample, 5.0f, 1.5f, 0.5f); // Depth = 5ms, Rate = 1.5Hz, Mix = 0.5
+
+        sample = soft_clip(sample);
+        //sample = hard_clip(sample, 0.7f);
+        sample *= output_vol;
 
         // Se converteste inapoi la int16_t pentru audio
         buffer[i] = (int16_t)(sample * 32767.0f);
