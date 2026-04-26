@@ -85,16 +85,24 @@ int main(int argc, char *argv[]) {
     // Incarcam Efectul
 
     uint32_t num_samples = data_size/ sizeof(int16_t);
-    float gain = 4.0f; // Crestem volumul pentru a forta distorsiunea
+    float gain = 50.0f; // Crestem volumul pentru a forta distorsiunea
+    float output_vol = 0.15f; // se scade volumul final pentru a compensa gain-ul
+
+    ChorusEffect *chorus = init_chorus((float)rate, 30.0f); // delay de 30 ms
+
 
     for (uint32_t i = 0; i < num_samples; i++) {
         // Convertire int16_t la float (-1.0, 1.0)
         float sample = (float)buffer[i] / 32768.0f;
         // aplicare gain
-        sample *= gain;
+        //sample *= gain;
+        
         // aplicare efect
         //sample = soft_clip(sample);
-        sample = hard_clip(sample, 0.8f);
+        //sample = hard_clip(sample, 0.7f);
+        //sample *= output_vol;
+        sample = process_chorus(chorus, sample, 5.0f, 1.5f, 0.5f); // Depth = 5ms, Rate = 1.5Hz, Mix = 0.5
+
         // Se converteste inapoi la int16_t pentru audio
         buffer[i] = (int16_t)(sample * 32767.0f);
     }
