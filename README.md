@@ -1,6 +1,7 @@
 # Digital-Guitar-Effects
 A se uitiliza urmatoarele comenzi:
 - pt. compilare: gcc play_wav.c -o play_wav -lasound -lm
+- pt. compilare+neon: gcc -o3 -mcpu=cortex-a76 -ffast-math acc_wav_play.c acc_effects.h -lasound -lm -o acc_wav_play
 - pt. executie: ./play_wav fisier.wav
 
 Daca apar erori la incarcarea fisierului .wav, trebuie convertit cu comanda:

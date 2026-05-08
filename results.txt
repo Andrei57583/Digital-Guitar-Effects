@@ -1,0 +1,16 @@
+1) Fara accelerare:
+$ time ./play_wav ~/Documents/guitar_final.wav 
+Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
+
+real	0m7.875s
+user	0m0.102s
+sys	0m0.000s
+
+
+2) Cu accelerare (efecte):
+$ time ./acc_wav_play ~/Documents/guitar_final.wav 
+Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
+
+real	0m7.875s
+user	0m0.095s
+sys	0m0.000s
