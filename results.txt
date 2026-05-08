@@ -1,3 +1,4 @@
+// Primul test
 1) Fara accelerare:
 $ time ./play_wav ~/Documents/guitar_final.wav 
 Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
@@ -14,3 +15,51 @@ Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
 real	0m7.875s
 user	0m0.095s
 sys	0m0.000s
+
+// Al doilea test
+1) Fara accelerare:
+ time ./play_wav ~/Documents/guitar_final.wav 
+Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
+
+real	0m7.872s
+user	0m0.093s
+sys	0m0.000s
+
+2) Cu accelerare (efecte):
+$ time ./acc_wav_play ~/Documents/guitar_final.wav 
+Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
+
+real	0m7.874s
+user	0m0.092s
+sys	0m0.004s
+
+3) Cu accelerare + LUT:
+time ./acc_wav_play_LUT ~/Documents/guitar_final.wav 
+Incarcat: 44100Hz, 16-bit, 2 canale, 1361100 bytes audio
+
+real	0m7.868s
+user	0m0.084s
+sys	0m0.005s
+
+// Al treilea test
+time ./play_wav ~/Documents/guitar_notes_final.wav 
+Incarcat: 48000Hz, 16-bit, 2 canale, 3384580 bytes audio
+
+real	0m17.907s
+user	0m0.224s
+sys	0m0.000s
+
+$ time ./acc_wav_play ~/Documents/guitar_notes_final.wav 
+Incarcat: 48000Hz, 16-bit, 2 canale, 3384580 bytes audio
+
+real	0m17.894s
+user	0m0.199s
+sys	0m0.012s
+
+$ time ./acc_wav_play_LUT ~/Documents/guitar_notes_final.wav 
+Incarcat: 48000Hz, 16-bit, 2 canale, 3384580 bytes audio
+
+real	0m17.888s
+user	0m0.187s
+sys	0m0.015s
+

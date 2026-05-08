@@ -5,6 +5,8 @@
     #define M_PI 3.14159265358979323846    
 #endif
 
+#define LUT_SIZE 1024
+
 #include <arm_neon.h>
 #include <math.h>
 #include <stdlib.h>
@@ -60,6 +62,7 @@ typedef struct
 {
     /* data */
     float *delay_buffer;
+    float *sin_lut;
     uint32_t buffer_size;
     uint32_t write_pos;
     float lfo_phase;
@@ -72,6 +75,11 @@ static inline AccChorusEffect* init_chorus_acc(float sample_rate, float max_dela
     c->sample_rate = sample_rate;
     c->buffer_size = (uint32_t)(max_delay_ms * sample_rate / 1000.0f);
     c->delay_buffer = (float*)calloc(c->buffer_size, sizeof(float));
+    c->sin_lut = (float*)malloc(LUT_SIZE * sizeof(float));
+    for (int i = 0; i < LUT_SIZE; i++) {
+        // Se calculeaza o perioada completa de sinus (0 la 2PI)
+        c->sin_lut[i] = sinf(i * 2.0f * M_PI / (float)LUT_SIZE);
+    }
     c->write_pos = 0;
     c->lfo_phase = 0.0f;
     return c;
@@ -80,8 +88,10 @@ static inline AccChorusEffect* init_chorus_acc(float sample_rate, float max_dela
 // Accelerarea chorus prin procesare in blocuri si vectorizare NEON
 static inline float process_chorus_block(AccChorusEffect *c, float *input, float *output, uint32_t num_samples,
                                     float depth, float rate, float mix) {
-    
+
     const float lfo_inc = 2.0f * M_PI * rate / c->sample_rate;
+    // Conversie de la faza (0...2PI) la index (0...1023)
+    const float phase_to_lut = (float)LUT_SIZE / (2.0f * M_PI);
     const float ms_to_samples = c->sample_rate / 1000.0f;
     const float base_delay = 15.0f * ms_to_samples;
     const float depth_samples = depth * ms_to_samples;
@@ -92,7 +102,9 @@ static inline float process_chorus_block(AccChorusEffect *c, float *input, float
 
     for (uint32_t i = 0; i < num_samples; i++) {
         // 1. Calcul Low-Frequency Oscillator (LFO)
-        float lfo_val = sinf(c->lfo_phase);
+        uint32_t lut_idx = (uint32_t)(c->lfo_phase * phase_to_lut) % LUT_SIZE;
+        float lfo_val = c->sin_lut[lut_idx];
+        
         c->lfo_phase += lfo_inc;
         if (c->lfo_phase > 2.0f * M_PI) {
             c->lfo_phase -= 2.0f * M_PI;    
