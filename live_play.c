@@ -50,9 +50,9 @@ int main() {
     }
 
     // 3. Initializare efecte
-    AccChorusEffect *chorus = init_chorus_acc((float)SAMPLE_RATE, 30.0f);
-    float gain = 40.0f;
-    float output_vol = 0.15f;
+    AccChorusEffect *chorus = init_chorus_acc((float)SAMPLE_RATE, 40.0f);
+    float gain = 2.5f;
+    float output_vol = 0.5f;
 
     // Buffer procesare
     int32_t *raw_buffer = malloc(PERIOD_SIZE * CHANNELS * sizeof(int32_t));
@@ -87,19 +87,39 @@ int main() {
             float_input[i] = ((float)raw_buffer[i * CHANNELS] / 2147483647.0f) * gain;
         }
 
-        // 5. Prcoesare Chorus
-        process_chorus_block(chorus, float_input, float_output, PERIOD_SIZE, 5.0f, 1.5f, 0.5f);
+        // // 6. Optimizare NEON: Soft Clip
+        // float overdrive_gain = 20.0f;
+        // uint32_t vect_size = (PERIOD_SIZE / 4) * 4;
+        // for(uint32_t j = 0; j < vect_size; j += 4) {
+        //     float32x4_t v = vld1q_f32(&float_output[j]);
+        //     v = vmulq_n_f32(v, overdrive_gain);
+        //     v = soft_clip_neon(v);
+        //     vst1q_f32(&float_output[j], v);
+        // }
+        // for (uint32_t j = vect_size; j < PERIOD_SIZE; j++) {
+        //     float_output[j] = soft_clip(float_output[j] * overdrive_gain);
+        // }
 
         // 6. Optimizare NEON: Soft Clip
+        float dist_gain = 20.0f;
+        float32x4_t dist_threshold = vdupq_n_f32(0.5f);
         uint32_t vect_size = (PERIOD_SIZE / 4) * 4;
         for(uint32_t j = 0; j < vect_size; j += 4) {
             float32x4_t v = vld1q_f32(&float_output[j]);
-            v = soft_clip_neon(v);
+            v = vmulq_n_f32(v, dist_gain);
+            v = hard_clip_neon(v, dist_threshold);
             vst1q_f32(&float_output[j], v);
         }
         for (uint32_t j = vect_size; j < PERIOD_SIZE; j++) {
-            float_output[j] = soft_clip(float_output[j]);
+            float_output[j] = hard_clip(float_output[j] * dist_gain, 0.5f);
         }
+
+
+        // 5. Prcoesare Chorus
+        // depth = 2, rate = 1.0f Hz, mix = 0.6f
+        process_chorus_block(chorus, float_input, float_output, PERIOD_SIZE, 2.0f, 1.0f, 0.6f);
+
+       
 
         // 7. Conversie inapoi la S32_LE (Stereo)
         for (int i = 0; i < PERIOD_SIZE; i++) {
