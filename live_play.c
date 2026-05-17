@@ -18,21 +18,36 @@ int main() {
     // plughw:2,0
     const char *device = "plughw:2,0";
 
-    printf("Deschidere dispozitiv captura (%s) \n", device);
+    printf("1. Deschidere dispozitiv captura (%s) \n", device);
     if ((err = snd_pcm_open(&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
         fprintf(stderr, "Eroare deschidere captura: %s\n", snd_strerror(err));
+        return 1;
     }
     
-    printf("Deschidere dispozitiv playback (%s) \n", device);
+    printf("2. Deschidere dispozitiv playback (%s) \n", device);
     if ((err = snd_pcm_open(&playback_handle, device, SND_PCM_STREAM_PLAYBACK, 0)) < 0) {
         fprintf(stderr, "Eroare deschidere playback: %s\n", snd_strerror(err));
+        snd_pcm_close(capture_handle);
+        return 1;
     }
 
     // 2. Configurare parametrii S32_LE
     snd_pcm_format_t format =  SND_PCM_FORMAT_S32_LE;
 
-    snd_pcm_set_params(capture_handle, format, SND_PCM_ACCESS_RW_INTERLEAVED, CHANNELS, SAMPLE_RATE, 1, 20000); // 20ms buffer total
-    snd_pcm_set_params(playback_handle, format, SND_PCM_ACCESS_RW_INTERLEAVED, CHANNELS, SAMPLE_RATE, 1, 20000); // 20ms buffer total
+    printf("3. Configurare parametrii captura (S32_LE, %dHz).\n", SAMPLE_RATE);      // 20ms buffer total
+    if ((err = snd_pcm_set_params(capture_handle, format, SND_PCM_ACCESS_RW_INTERLEAVED, CHANNELS, SAMPLE_RATE, 1, 20000)) < 0) {
+        fprintf(stderr, "Parametrii incorecti pentru captura: %s\n", snd_strerror(err));
+        snd_pcm_close(capture_handle);
+        snd_pcm_close(playback_handle);
+        return 1;
+    }
+    printf("4. Configurare parametrii playback (S32_LE, %dHz).\n", SAMPLE_RATE);      // 20ms buffer total
+    if ((err = snd_pcm_set_params(playback_handle, format, SND_PCM_ACCESS_RW_INTERLEAVED, CHANNELS, SAMPLE_RATE, 1, 20000)) < 0) {
+        fprintf(stderr, "Parametrii incorecti pentru captura: %s\n", snd_strerror(err));
+        snd_pcm_close(capture_handle);
+        snd_pcm_close(playback_handle);
+        return 1;
+    }
 
     // 3. Initializare efecte
     AccChorusEffect *chorus = init_chorus_acc((float)SAMPLE_RATE, 30.0f);
@@ -49,10 +64,23 @@ int main() {
     while(1) {
         // 3. Citire intrare (chitara)
         err = snd_pcm_readi(capture_handle, raw_buffer, PERIOD_SIZE);
-        if (err == -EPIPE) {
-            snd_pcm_prepare(capture_handle);
-            continue;
-        } else if (err < 0) break;
+        if (err < 0) {
+            if (err == -EPIPE) {
+                snd_pcm_prepare(capture_handle);
+                continue;
+            } else if (err == -EIO) {
+                usleep(1000); // asteapta o milisecunda
+                snd_pcm_prepare(capture_handle);
+                snd_pcm_start(capture_handle);
+                continue;
+            } 
+            else {
+                fprintf(stderr, "Eroare citire audio: %s\n",snd_strerror(err));
+                break;
+        }
+        }
+        
+        //(err < 0) break;
 
         // 4. Conversie S32_LE la float. S32_LE are range: -2,147,483,647 la +2,147,483,647
         for (int i = 0; i < PERIOD_SIZE; i++) {
