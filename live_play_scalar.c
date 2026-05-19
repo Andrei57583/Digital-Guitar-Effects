@@ -4,14 +4,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <alsa/asoundlib.h>
-#include "acc_effects.h"
+//#include "acc_effects.h"
 #include "effects.h"
 #include <time.h>
 
 #define PERIOD_SIZE 128
 #define SAMPLE_RATE 44100
 #define CHANNELS 2
-
 
 int main() {
     int err;
@@ -53,15 +52,14 @@ int main() {
     }
 
     // 3. Initializare efecte
-    AccChorusEffect *chorus = init_chorus_acc((float)SAMPLE_RATE, 40.0f);
+    ChorusEffect *chorus = init_chorus((float)SAMPLE_RATE, 40.0f);
     float gain = 2.5f;
     float output_vol = 0.5f;
+    float dist_gain = 20.0f;
 
     // Buffer procesare
     int32_t *raw_buffer = malloc(PERIOD_SIZE * CHANNELS * sizeof(int32_t));
-    float *float_input = malloc(PERIOD_SIZE * sizeof(float));
-    float *float_output = malloc(PERIOD_SIZE * sizeof(float));
-
+    
     // Calculul timpului de procesare
     struct timespec start, end;
     uint64_t total_time_ns = 0;
@@ -91,46 +89,28 @@ int main() {
         // START CRONOMETRU HW
         clock_gettime(CLOCK_MONOTONIC, &start);
 
-        // 4. Conversie S32_LE la float. S32_LE are range: -2,147,483,647 la +2,147,483,647
+        //(err < 0) break;
         for (int i = 0; i < PERIOD_SIZE; i++) {
-            float_input[i] = ((float)raw_buffer[i * CHANNELS] / 2147483647.0f) * gain;
-        }
+            // 4. Conversie S32_LE la float. S32_LE are range: -2,147,483,647 la +2,147,483,647
+            float sample = ((float)raw_buffer[i * CHANNELS] / 2147483647.0f) * gain;
+            
 
-        // 5. Prcoesare Chorus
-        // depth = 2, rate = 1.0f Hz, mix = 0.6f
-        process_chorus_block(chorus, float_input, float_output, PERIOD_SIZE, 2.0f, 1.0f, 0.6f);
+            // 5.Soft Clip
+            // float overdrive_gain = 20.0f;
+            // sample = (sample * dist_gain);
+            
+            // 5. Hard Clip
+            
+            sample = hard_clip(sample * dist_gain, 0.5f);
 
-        // // 6. Optimizare NEON: Soft Clip
-        // float overdrive_gain = 20.0f;
-        // uint32_t vect_size = (PERIOD_SIZE / 4) * 4;
-        // for(uint32_t j = 0; j < vect_size; j += 4) {
-        //     float32x4_t v = vld1q_f32(&float_output[j]);
-        //     v = vmulq_n_f32(v, overdrive_gain);
-        //     v = soft_clip_neon(v);
-        //     vst1q_f32(&float_output[j], v);
-        // }
-        // for (uint32_t j = vect_size; j < PERIOD_SIZE; j++) {
-        //     float_output[j] = soft_clip(float_output[j] * overdrive_gain);
-        // }
+            // 6. Prcoesare Chorus
+            // depth = 2, rate = 1.0f Hz, mix = 0.6f
 
-        // 6. Optimizare NEON: Soft Clip
-        float dist_gain = 20.0f;
-        float32x4_t dist_threshold = vdupq_n_f32(0.5f);
-        uint32_t vect_size = (PERIOD_SIZE / 4) * 4;
-        for(uint32_t j = 0; j < vect_size; j += 4) {
-            float32x4_t v = vld1q_f32(&float_output[j]);
-            v = vmulq_n_f32(v, dist_gain);
-            v = hard_clip_neon(v, dist_threshold);
-            vst1q_f32(&float_output[j], v);
-        }
-        for (uint32_t j = vect_size; j < PERIOD_SIZE; j++) {
-            float_output[j] = hard_clip(float_output[j] * dist_gain, 0.5f);
-        }
+            sample = process_chorus(chorus, sample, 2.0f, 1.0f, 0.6f);
 
-       
-        // 7. Conversie inapoi la S32_LE (Stereo)
-        for (int i = 0; i < PERIOD_SIZE; i++) {
-            int32_t out_val = (int32_t)(float_output[i] * output_vol * 2147483647.0f);
+            // 7. Conversie inapoi la S32_LE (Stereo)
+        
+            int32_t out_val = (int32_t)(sample * output_vol * 2147483647.0f);
             raw_buffer[i * CHANNELS] = out_val; // stanga
             raw_buffer[i * CHANNELS + 1] = out_val; // dreapta
         }
@@ -152,6 +132,7 @@ int main() {
         loop_counter = 0;
         }   
 
+
         // 8. Trimite sunetul la interfata
         err = snd_pcm_writei(playback_handle, raw_buffer, PERIOD_SIZE);
         if (err == -EPIPE) {
@@ -161,8 +142,6 @@ int main() {
 
     // Curatare
     free(raw_buffer);
-    free(float_input);
-    free(float_output);
     snd_pcm_close(capture_handle);
     snd_pcm_close(playback_handle);
     return 0;
